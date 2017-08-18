@@ -1,5 +1,9 @@
 """ Compute protein sequence k-mers """
-from seq2seq.models import SimpleSeq2Seq
+from recurrentshop import RecurrentModel   
+from seq2seq.models import SimpleSeq2Seq, Seq2Seq
+from keras.models import Sequential
+from keras.layers import Dense, Activation, Input
+
 import numpy as np
 ta1 = 'MAPPSVFAEVPQAQPVLVFKLTADFREDPDPRKVNLGVGAYRTDDCHPWVLPVVKKVEQKIANDNSLNHEYLPILGLAEFRSCASRLALGDDSPALKEKRVGGVQSLGGTGALRIGADFLARWYNGTNNKNTPVYVSSPTWENHNAVFSAAGFKDIRSYRYWDAEKRGLDLQGFLNDLENAPEFSIVVLHACAHNPTGIDPTPEQWKQIASVMKHRFLFPFFDSAYQGFASGNLERDAWAIRYFVSEGFEFFCAQSFSKNFGLYNERVGNLTVVGKEPESILQVLSQMEKIVRITWSNPPAQGARIVASTLSNPELFEEWTGNVKTMADRILTMRSELRARLEALKTPGTWNHITDQIGMFSFTGLNPKQVEYLVNEKHIYLLPSGRINVSGLTTKNLDYVATSIHEAVTKIQ'
 ta2 = 'MAGNGAIVESDPLNWGAAAAELAGSHLDEVKRMVAQARQPVVKIEGSTLRVGQVAAVASAKDASGVAVELDEEARPRVKASSEWILDCIAHGGDIYGVTTGFGGTSHRRTKDGPALQVELLRHLNAGIFGTGSDGHTLPSEVTRAAMLVRINTLLQGYSGIRFEILEAITKLLNTGVSPCLPLRGTITASGDLVPLSYIAGLITGRPNAQAVTVDGRKVDAAEAFKIAGIEGGFFKLNPKEGLAIVNGTSVGSALAATVMYDANVLAVLSEVLSAVFCEVMNGKPEYTDHLTHKLKHHPGSIEAAAIMEHILDGSSFMKQAKKVNELDPLLKPKQDRYALRTSPQWLGPQIEVIRAATKSIEREVNSVNDNPVIDVHRGKALHGGNFQGTPIGVSMDNARLAIANIGKLMFAQFSELVNEFYNNGLTSNLAGSRNPSLDYGFKGTEIAMASYCSELQYLGNPITNHVQSADEHNQDVNSLGLVSARKTAEAIDILKLMSSTYIVALCQAVDLRHLEENIKASVKNTVTQVAKKVLTMNPSGELSSARFSEKELISAIDREAVFTYAEDAASASLPLMQKLRAVLVDHALSSGERGAGALRVLQDHQVRGGAPRGAAPGGGGRPRGVAEGTAPVANRIADSRSFPLYRFVREELGCVFLTGERLKSPGEECNKVFVGISQGKLVDPMLECLKEWDGKPLPINIK'
@@ -43,31 +47,68 @@ input2 = one_hot(' '.join(kmers(ta2, 3)), n=10)
 # model.fit([np.array(input)], [np.array([1])])
 
 TRAIN_BATCH_SIZE = 2
-INPUT_SEQUENCE_LENGTH = 20
+INPUT_SEQUENCE_LENGTH = 1000
 TOKEN_REPRESENTATION_SIZE = 10
 HIDDEN_LAYER_DIMENSION = 3
-TOKEN_DICT_SIZE = 4
-ANSWER_MAX_TOKEN_LENGTH = 8
+TOKEN_DICT_SIZE = TOKEN_REPRESENTATION_SIZE
+ANSWER_MAX_TOKEN_LENGTH = INPUT_SEQUENCE_LENGTH
 X = np.zeros((TRAIN_BATCH_SIZE, INPUT_SEQUENCE_LENGTH, TOKEN_REPRESENTATION_SIZE))
+Y = np.zeros((TRAIN_BATCH_SIZE, INPUT_SEQUENCE_LENGTH, TOKEN_REPRESENTATION_SIZE))
 
-X[1] = input1
-X[2] = input2
+sample = [input1, input2]
+
+for i in range(0, len(sample)):
+    for j in range(0, len(sample[i])):
+        px = sample[i][len(sample[i])-j-1]
+        py = sample[i][j]
+        token = np.zeros(TOKEN_REPRESENTATION_SIZE)
+        token[px] = 1
+        X[i,j] = token
+        token = np.zeros(TOKEN_REPRESENTATION_SIZE)
+        token[py] = 1
+        Y[i,j] = token
   
-model = SimpleSeq2seq(
-        input_dim=TOKEN_REPRESENTATION_SIZE,
-        input_length=INPUT_SEQUENCE_LENGTH,
-        hidden_dim=HIDDEN_LAYER_DIMENSION,
-        output_dim=TOKEN_DICT_SIZE,
-        output_length=ANSWER_MAX_TOKEN_LENGTH,
-        depth=1
-    )
+# model = SimpleSeq2Seq(input_dim=TOKEN_REPRESENTATION_SIZE,input_length=INPUT_SEQUENCE_LENGTH,
+#                       hidden_dim=HIDDEN_LAYER_DIMENSION,output_dim=TOKEN_DICT_SIZE,
+#                       output_length=ANSWER_MAX_TOKEN_LENGTH,depth=1)
 
-             
-data = np.array([np.array(input1), np.array(input2)])
-
-ndata = np.expand_dims(data,2)
-ndata = np.expand_dims(ndata,3)
-
-X[1,] = input1
-""" It won't work. It looks like we need to batch the input into chunks of same length """
+print('Create model')
+model = Seq2Seq(input_dim=TOKEN_REPRESENTATION_SIZE,input_length=INPUT_SEQUENCE_LENGTH,
+                      hidden_dim=HIDDEN_LAYER_DIMENSION,output_dim=TOKEN_DICT_SIZE,
+                      output_length=ANSWER_MAX_TOKEN_LENGTH,depth=4)
+print('Compile model')
+model.compile(loss='mse', optimizer='rmsprop')
+print('Train')
+#model.fit(X, Y, epochs=1000)
+print('Predict model')
 y = model.predict(X)
+
+# Once the model is fitted, we extract the encoder:
+
+input1 = Input(shape=(INPUT_SEQUENCE_LENGTH, TOKEN_REPRESENTATION_SIZE))
+input2 = model.layers[0](input1)     
+input3 = model.layers[1](input2)     
+input4 = model.layers[2](input3)     
+input5 = model.layers[3](input4)     
+input6 = model.layers[4](input5)     
+
+rnn = RecurrentModel(input=input1, output=input6)
+
+mn = RecurrentSequential()                       
+mn.add(rnn.get_cell()) 
+
+""" In principle, we have here the encoder as a keras recurrent layer """
+
+mn.add(model.layers[5].get_cell()) 
+
+kmodel = 
+
+
+# data = np.array([np.array(input1), np.array(input2)])
+
+# ndata = np.expand_dims(data,2)
+# ndata = np.expand_dims(ndata,3)
+
+# X[1,] = input1
+# """ It won't work. It looks like we need to batch the input into chunks of same length """
+# y = model.predict(X)
