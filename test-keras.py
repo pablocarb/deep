@@ -17,3 +17,4 @@ model = Sequential()
 """ Normalization layers: BatchNormalization """
 """ Noise layers: GaussianNoise, GaussianDropout, AlphaDropout """
 """ Layer wrappers : TimeDistributed (applies a layer to every temporal slidce, Bidirectional: for RNNs """
+
