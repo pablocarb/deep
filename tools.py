@@ -76,3 +76,21 @@ def ecdataset(seqdict, ecinfo):
 def printecinfo(data):
     for ec in sorted(data):
         print (ec, len(data[ec]))
+
+def label2class(llist):
+    cl = sorted( set(llist) )
+    cln = [cl.index(w) for w in llist]
+    return cln, cl
+
+def dataset(data, eclist, minsize=10):
+    seqs = []
+    seqids = []
+    ectrain = []
+    for ec in sorted(eclist):
+        if ec in data and len(data[ec]) >= minsize:
+            for sinfo in data[ec]:
+                seqids.append( sinfo[0] )
+                seqs.append( sinfo[1] )
+                ectrain.append(ec)
+    cl, clids = label2class(ectrain)
+    return seqs, seqids, cl, ectrain
