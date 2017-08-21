@@ -1,5 +1,7 @@
 """ Testing a simple deep learning classifier using LSTM for modeling sequences """
 import os
+os.environ['KERAS_BACKEND'] = 'tensorflow'
+
 import tools
 import numpy as np
 from keras.preprocessing.text import hashing_trick
@@ -11,11 +13,10 @@ from hashlib import md5
 from importlib import reload
 reload(tools)
 
-
 """ Maximum sequence length (padded with zeros) """
 MAX_SEQ_LENGTH = 1000
 """ K-mer depth """
-SEQDEPTH = 4
+SEQDEPTH = 100
 """ Hashed dictionary size """
 TOKEN_SIZE = 20
 
@@ -100,11 +101,11 @@ print("Model definition...")
 Xsr = np.flip( Xs2, 1 )
 
 model = Sequential()
-model.add( LSTM(1024, input_shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE),
+model.add( LSTM(32, input_shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE),
                 dropout=0.2, recurrent_dropout=0.2) ) #, return_sequences=True) )
 #model.add( LSTM(32, dropout=0.1, recurrent_dropout=0.1) )
 # model.add( Dense(100, activation='tanh') )
-model.add( Dense(32, activation='relu') )
+model.add( Dense(256, activation='relu') )
 model.add( Dense(Y.shape[1], activation='sigmoid') )
 
 # Typically for LSTM, we use RMSprop(lr=0.01) optimizer
