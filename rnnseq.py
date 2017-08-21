@@ -30,12 +30,27 @@ seqs = [[fas1[s] for s in sorted(fas1)], [fas2[s] for s in sorted(fas2)]]
 
 X = np.zeros( (TRAIN_BATCH_SIZE, MAX_SEQ_LENGTH, SEQDEPTH) )
 Xs = np.zeros( (TRAIN_BATCH_SIZE, MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE) )
+Xs2 = np.zeros( (TRAIN_BATCH_SIZE, MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE) )
 Y = np.transpose( np.array( [np.append( np.ones(n1), np.zeros(n2) ),
                              np.append( np.zeros(n1), np.ones(n2) )] ) )
 # Y = Y[:,0]
 
 # Use to_categorical to convert to one-hot each entry in the sequence
 # hot1 = np_utils.to_categorical( input1 - 1 )
+
+""" Architecture 3: I just realised that there is no need for hashing, 
+    but concatenate one-hot encoding down to desired depth """
+n = 0
+for i in range(0, len(seqs)):
+    for j in range(0, len(seqs[i])):
+        aaix = tools.aaindex( str(seqs[i][j].seq) )
+        for l in range(0, len(aaix)):
+            for k in range(0, SEQDEPTH):
+                try:
+                    Xs2[n, l, aaix[l+k] + TOKEN_SIZE*k] = 1
+                except:
+                    continue
+        n += 1
 
 n = 0
 for i in range(0, len(seqs)):
@@ -45,7 +60,7 @@ for i in range(0, len(seqs)):
             sequence = str(' '.join( kmers ))
             input1 = np.array(hashing_trick(sequence, hash_function= 'md5', n=TOKEN_SIZE+1))
             for l in range(0, len(input1)):
-                """ Architecture 1: usehashed kmer """
+                """ Architecture 1: use hashed kmer """
                 X[n, l, k-1] = input1[l]
                 """ Architecture 2: activate input corresponding to hashed kmer (one-hot) """
                 Xs[n, l, (k-1)*TOKEN_SIZE + input1[l]-1] = 1
@@ -53,6 +68,7 @@ for i in range(0, len(seqs)):
 
 """ Flip sequences (zero-padding at the start) """
 Xsr = np.flip( Xs, 1 )
+Xsr = np.flip( Xs2, 1 )
 
 model = Sequential()
 model.add( LSTM(128, input_shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE),

@@ -1,4 +1,5 @@
 from Bio import SeqIO
+from Bio.PDB.Polypeptide import d1_to_index
 import numpy as np
 
 def kmers(seq, n):
@@ -7,6 +8,14 @@ def kmers(seq, n):
         kmer = seq[i:(i+n)]
         kpos.append(min(kmer, kmer[::-1]))
     return kpos
+
+def aaindex(seq):
+    ix = []
+    for a in seq:
+        if a in d1_to_index:
+            ix.append( d1_to_index[a] )
+    return ix
+
 
 def readfasta(ffile):
     record_dict = SeqIO.to_dict(SeqIO.parse(ffile, "fasta"))
