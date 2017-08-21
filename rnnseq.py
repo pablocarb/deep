@@ -7,13 +7,15 @@ from keras.utils import np_utils
 from keras.models import Sequential
 from keras.layers import LSTM, Dense, Activation, Dropout
 from hashlib import md5
-# from importlib import reload
+
+from importlib import reload
+reload(tools)
 
 
 """ Maximum sequence length (padded with zeros) """
 MAX_SEQ_LENGTH = 1000
 """ K-mer depth """
-SEQDEPTH = 10
+SEQDEPTH = 4
 """ Hashed dictionary size """
 TOKEN_SIZE = 20
 
@@ -93,16 +95,16 @@ if HASHED:
             n += 1
     Xsr = np.flip( Xs, 1 )
 
-print("Defining model...")
+print("Model definition...")
 """ Flip sequences (zero-padding at the start) """
 Xsr = np.flip( Xs2, 1 )
 
 model = Sequential()
-model.add( LSTM(128, input_shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE),
-                dropout=0.2, recurrent_dropout=0.2) ) # , return_sequences=True) )
-# model.add( LSTM(32, dropout=0.1, recurrent_dropout=0.1) )
+model.add( LSTM(1024, input_shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE),
+                dropout=0.2, recurrent_dropout=0.2) ) #, return_sequences=True) )
+#model.add( LSTM(32, dropout=0.1, recurrent_dropout=0.1) )
 # model.add( Dense(100, activation='tanh') )
-model.add( Dense(32, activation='elu') )
+model.add( Dense(32, activation='relu') )
 model.add( Dense(Y.shape[1], activation='sigmoid') )
 
 # Typically for LSTM, we use RMSprop(lr=0.01) optimizer
@@ -110,6 +112,6 @@ model.add( Dense(Y.shape[1], activation='sigmoid') )
 # model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
 model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
 
-model.optimizer.lr = 0.001
+#model.optimizer.lr = 0.001
 
 model.fit(Xsr, Y, epochs=10, batch_size=100, validation_split=0.1)

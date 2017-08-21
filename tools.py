@@ -82,13 +82,16 @@ def label2class(llist):
     cln = [cl.index(w) for w in llist]
     return cln, cl
 
-def dataset(data, eclist, minsize=10):
+def dataset(data, eclist, minsize=100, shuffle=True):
     seqs = []
     seqids = []
     ectrain = []
     for ec in sorted(eclist):
         if ec in data and len(data[ec]) >= minsize:
-            for sinfo in data[ec]:
+            if shuffle:
+                np.random.shuffle(data[ec])
+            for i in range(0, minsize):
+                sinfo = data[ec][i]
                 seqids.append( sinfo[0] )
                 seqs.append( sinfo[1] )
                 ectrain.append(ec)
