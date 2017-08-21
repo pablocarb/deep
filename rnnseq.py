@@ -61,7 +61,7 @@ if EXAMPLE:
     Y = np.transpose( np.array( [np.append( np.ones(n1), np.zeros(n2) ),
                                  np.append( np.zeros(n1), np.ones(n2) )] ) )
     # Y = Y[:,0]
-    
+
     # Use to_categorical to convert to one-hot each entry in the sequence
     # hot1 = np_utils.to_categorical( input1 - 1 )
 
@@ -70,7 +70,7 @@ X = np.zeros( (TRAIN_BATCH_SIZE, MAX_SEQ_LENGTH, SEQDEPTH) )
 Xs = np.zeros( (TRAIN_BATCH_SIZE, MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE) )
 Xs2 = np.zeros( (TRAIN_BATCH_SIZE, MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE) )
 
-""" Architecture 3: I just realised that there is no need for hashing, 
+""" Architecture 3: I just realised that there is no need for hashing,
     but concatenate one-hot encoding down to desired depth """
 n = 0
 for i in range(0, len(seqs)):
@@ -83,8 +83,11 @@ for i in range(0, len(seqs)):
                 except:
                     continue
         n += 1
+""" Flip sequences (zero-padding at the start) """
+Xsr = np.flip( Xs2, 1 )
 
-HASHED = False
+
+HASHED = True
 if HASHED:
     n = 0
     for i in range(0, len(seqs)):
@@ -102,8 +105,6 @@ if HASHED:
     Xsr = np.flip( Xs, 1 )
 
 print("Model definition...")
-""" Flip sequences (zero-padding at the start) """
-Xsr = np.flip( Xs2, 1 )
 
 model = Sequential()
 model.add( LSTM(32, input_shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE),
