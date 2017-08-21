@@ -16,7 +16,7 @@ reload(tools)
 """ Maximum sequence length (padded with zeros) """
 MAX_SEQ_LENGTH = 1000
 """ K-mer depth """
-SEQDEPTH = 100
+SEQDEPTH = 10
 """ Hashed dictionary size """
 TOKEN_SIZE = 20
 
@@ -28,13 +28,18 @@ seqdict = tools.dbfasta(fasfile)
 seqinfo, ecinfo = tools.seqinfo(infofile)
 data = tools.ecdataset(seqdict, ecinfo)
 
-pattern = '2.2.'
+pattern = '6.'
 eclist = set()
 for ec in ecinfo:
     if ec.startswith(pattern):
         eclist.add(ec)
 
+ectest = set(['1.4.1.13','2.2.1.2','3.1.1.3','4.1.1.11','5.1.1.1','6.1.1.18'])
+eclist = ectest
+
 seqs, seqids, Y, Yids = tools.dataset(data, eclist)
+
+
 Y =  np_utils.to_categorical(Y)
 TRAIN_BATCH_SIZE = len(seqs)
 
@@ -102,17 +107,18 @@ Xsr = np.flip( Xs2, 1 )
 
 model = Sequential()
 model.add( LSTM(32, input_shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE),
-                dropout=0.2, recurrent_dropout=0.2) ) #, return_sequences=True) )
+                activation='tanh', recurrent_activation='sigmoid',
+                dropout=0.2, recurrent_dropout=0.01) ) #, return_sequences=True) )
 #model.add( LSTM(32, dropout=0.1, recurrent_dropout=0.1) )
 # model.add( Dense(100, activation='tanh') )
 model.add( Dense(256, activation='relu') )
-model.add( Dense(Y.shape[1], activation='sigmoid') )
+model.add( Dense(Y.shape[1], activation='softmax') )
 
 # Typically for LSTM, we use RMSprop(lr=0.01) optimizer
 
 # model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
-model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
+model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['categorical_accuracy'])
 
 #model.optimizer.lr = 0.001
 
-model.fit(Xsr, Y, epochs=10, batch_size=100, validation_split=0.1)
+model.fit(Xsr, Y, epochs=1000, batch_size=100, validation_split=0.1)
