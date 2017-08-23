@@ -1,6 +1,7 @@
 from Bio import SeqIO
 from Bio.PDB.Polypeptide import d1_to_index
 import numpy as np
+import os,glob
 
 def kmers(seq, n):
     kpos = []
@@ -97,3 +98,58 @@ def dataset(data, eclist, minsize=100, shuffle=True):
                 ectrain.append(ec)
     cl, clids = label2class(ectrain)
     return seqs, seqids, cl, ectrain
+
+def ecdataset(TEST=False):
+    fasfile = os.path.join('/mnt/SBC1/data/METANETX2', 'seqs.fasta')
+    infofile = os.path.join('/mnt/SBC1/data/METANETX2', 'reac_seqs.tsv')
+
+    seqdict = tools.dbfasta(fasfile)
+    seqinfo, ecinfo = tools.seqinfo(infofile)
+    data = tools.ecdataset(seqdict, ecinfo)
+
+    pattern = ''
+    eclist = set()
+    for ec in ecinfo:
+        if ec.startswith(pattern):
+            eclist.add(ec)
+    if TEST:
+        ectest = set(['1.4.1.13','2.2.1.2','3.1.1.3','4.1.1.11','5.1.1.1','6.1.1.18'])
+        eclist = ectest
+
+    seqs, seqids, Y, Yids = tools.dataset(data, eclist)
+    return seqs, seqids, Y, Yids
+
+def thermodataset(balanced=False):
+    folder = '/mnt/SBC1/data/thermostability/montanucci08'
+
+    ffile = os.path.join(folder, 'Allsequences.fasta')
+    rd = SeqIO.to_dict(SeqIO.parse(ffile, "fasta"))
+    """ doi:  10.1093/bioinformatics/btn166 """
+    """ Left: thermophilic microbial organism, right: a mesophilic one. """
+    seqs = []
+    seqids = []
+    Y = []
+    for clus in glob.glob(os.path.join(folder, 'cluster.*')):
+        for line in open(clus):
+            left, right = line.rstrip().split()
+            s1 = str(rd[left].seq)
+            s2 = str(rd[right].seq)
+            if not balanced:
+                if s1 not in seqs:
+                    seqs.append(s1)
+                    seqids.append(left)
+                    Y.append(1)
+                if s2 not in seqs:
+                    seqs.append(s2)
+                    seqids.append(right)
+                    Y.append(0)
+            else:
+                if s1 not in seqs and s2 not in seqs:
+                    seqs.append(s1)
+                    seqids.append(left)
+                    Y.append(1)
+                    seqs.append(s2)
+                    seqids.append(left)
+                    Y.append(0)
+    cl, clids = label2class(Y)
+    return seqs, seqids, cl, Y

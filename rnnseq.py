@@ -6,8 +6,9 @@ import tools
 import numpy as np
 from keras.preprocessing.text import hashing_trick
 from keras.utils import np_utils
-from keras.models import Sequential
-from keras.layers import LSTM, Dense, Activation, Dropout
+from keras.models import Sequential, Model
+from keras.layers import LSTM, Dense, Activation, Dropout, Merge, Input
+from keras.layers.merge import Concatenate
 from hashlib import md5
 
 from importlib import reload
@@ -54,30 +55,30 @@ def tensorSeqHashed(seqs, MAX_SEQ_LENGTH, SEQDEPTH, TOKEN_SIZE, HASH_FUNCTION= '
 """ Maximum sequence length (padded with zeros) """
 MAX_SEQ_LENGTH = 1000
 """ K-mer depth """
-SEQDEPTH = 4
+SEQDEPTH = 1 # 4
 """ Hashed dictionary size """
 TOKEN_SIZE = 20
 
-fasfile = os.path.join('/mnt/SBC1/data/METANETX2', 'seqs.fasta')
-infofile = os.path.join('/mnt/SBC1/data/METANETX2', 'reac_seqs.tsv')
 
 print("Building training set...")
-seqdict = tools.dbfasta(fasfile)
-seqinfo, ecinfo = tools.seqinfo(infofile)
-data = tools.ecdataset(seqdict, ecinfo)
 
-pattern = ''
-eclist = set()
-for ec in ecinfo:
-    if ec.startswith(pattern):
-        eclist.add(ec)
+DATASET = 'THERMO'
+#DATASET = 'EC'
 
-TEST = False
-if TEST:
-    ectest = set(['1.4.1.13','2.2.1.2','3.1.1.3','4.1.1.11','5.1.1.1','6.1.1.18'])
-    eclist = ectest
-
-seqs, seqids, Y, Yids = tools.dataset(data, eclist)
+if DATASET == 'EC':
+    seqs, seqids, Y, Yids = tools.ecdataset()
+    SEQDEPTH = 4
+    LSTMDIM = 128
+    HIDDENDIM = 256
+    METRICS = 'categorical_accuracy'
+    OUTACTIVATION = 'softmax'
+elif DATASET == 'THERMO':
+    seqs, seqids, Y, Yids = tools.thermodataset(balanced=True)
+    SEQDEPTH = 2
+    LSTMDIM = 32
+    HIDDENDIM = 16
+    METRICS = 'categorical_accuracy'
+    OUTACTIVATION = 'sigmoid'
 
 ix = [i for i in np.arange(0, len(seqs))]
 np.random.shuffle( ix )
@@ -88,7 +89,7 @@ Y = [Y[i] for i in ix]
 TRAIN_BATCH_SIZE = len(seqs)
 Y =  np_utils.to_categorical(Y)
 
-print("Training set [%s]: %d; Classes: %d" % (pattern, len(seqs), len(set(Yids))))
+print("Training set [%s]: %d; Classes: %d" % (DATASET, len(seqs), len(set(Yids))))
 
 print("Allocating tensors...")
 
@@ -103,13 +104,37 @@ else:
 print("Model definition...")
 
 model = Sequential()
-model.add( LSTM(128, input_shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE),
+model.add( LSTM(LSTMDIM, input_shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE),
                 activation='tanh', recurrent_activation='sigmoid',
                 dropout=0.2, recurrent_dropout=0.01) ) #, return_sequences=True) )
 #model.add( LSTM(32, dropout=0.1, recurrent_dropout=0.1) )
 # model.add( Dense(100, activation='tanh') )
-model.add( Dense(256, activation='relu') )
-model.add( Dense(Y.shape[1], activation='softmax') )
+#model.add( Dense(HIDDENDIM, activation='relu') )
+model.add( Dense(Y.shape[1], activation=OUTACTIVATION) )
+
+# A test example about merging layers: merge the output of the RNN with some other external input tensor
+IMERGE = False
+if IMERGE:
+    # This is my sequence tensor
+    input1 = Input(shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE))
+    x10 = LSTM(LSTMDIM, activation='tanh', recurrent_activation='sigmoid',
+         dropout=0.2, recurrent_dropout=0.01)(input1)
+    x1 = Dense(16)(x10)
+
+    # A random input tensor just for testing purposes
+    noise = np.random.normal( size=(len(seqs), 32) )
+    input2 = Input(shape=(noise.shape,))
+    x2 = Dense(8, activation='relu')(input2)
+
+    # Concatenate
+    concat = Concatenate()([x1, x2])
+    out1 = Dense(18)(concat)
+    out = Dense(Y.shape[1])(out1)
+
+    # Define model from tensor graph
+    bigmodel = Model(inputs=[input1, input2], outputs=out)
+    bigmodel.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['categorical_accuracy'])
+    bigmodel.fit([Xsr,noise], Y, epochs=1000, batch_size=100, validation_split=0.1)
 
 # Typically for LSTM, we use RMSprop(lr=0.01) optimizer
 
@@ -118,4 +143,4 @@ model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['ca
 
 #model.optimizer.lr = 0.001
 
-model.fit(Xsr, Y, epochs=1000, batch_size=100, validation_split=0.1)
+model.fit([Xsr,noise], Y, epochs=1000, batch_size=100, validation_split=0.1)
