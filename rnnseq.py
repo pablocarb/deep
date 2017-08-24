@@ -62,7 +62,8 @@ TOKEN_SIZE = 20
 
 print("Building training set...")
 
-DATASET = 'THERMO'
+#DATASET = 'THERMO'
+DATASET = 'THERMO2'
 #DATASET = 'EC'
 
 if DATASET == 'EC':
@@ -72,6 +73,7 @@ if DATASET == 'EC':
     HIDDENDIM = 256
     METRICS = 'categorical_accuracy'
     OUTACTIVATION = 'softmax'
+    EPOCHS = 1000
 elif DATASET == 'THERMO':
     seqs, seqids, Y, Yids = tools.thermodataset(balanced=True)
     SEQDEPTH = 2
@@ -79,6 +81,19 @@ elif DATASET == 'THERMO':
     HIDDENDIM = 16
     METRICS = 'categorical_accuracy'
     OUTACTIVATION = 'sigmoid'
+    EPOCHS = 10
+elif DATASET == 'THERMO2':
+    seqs, seqids, Y, Yids = tools.thermodataset2()
+    SEQDEPTH = 8
+    LSTMDIM = 256
+    HIDDENDIM = 32
+    METRICS = 'binary_accuracy'
+    OUTACTIVATION = 'softmax'
+    EPOCHS = 10
+    TOKEN_SIZE = 40
+    vseqs, vseqids, vY, vYids = tools.thermodataset(balanced=True)
+    vY =  np_utils.to_categorical(vY)
+    vXsr =  tensorSeqHashed(vseqs, MAX_SEQ_LENGTH, SEQDEPTH, TOKEN_SIZE, HASH_FUNCTION= 'md5')
 
 ix = [i for i in np.arange(0, len(seqs))]
 np.random.shuffle( ix )
@@ -109,7 +124,7 @@ model.add( LSTM(LSTMDIM, input_shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE),
                 dropout=0.2, recurrent_dropout=0.01) ) #, return_sequences=True) )
 #model.add( LSTM(32, dropout=0.1, recurrent_dropout=0.1) )
 # model.add( Dense(100, activation='tanh') )
-#model.add( Dense(HIDDENDIM, activation='relu') )
+model.add( Dense(HIDDENDIM, activation='relu') )
 model.add( Dense(Y.shape[1], activation=OUTACTIVATION) )
 
 # A test example about merging layers: merge the output of the RNN with some other external input tensor
@@ -138,9 +153,9 @@ if IMERGE:
 
 # Typically for LSTM, we use RMSprop(lr=0.01) optimizer
 
-# model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
+#model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
 model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['categorical_accuracy'])
 
 #model.optimizer.lr = 0.001
 
-model.fit([Xsr,noise], Y, epochs=1000, batch_size=100, validation_split=0.1)
+model.fit(Xsr, Y, epochs=EPOCHS, batch_size=100, validation_data=(vXsr, vY)) #validation_split=0.1)

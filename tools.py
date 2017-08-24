@@ -153,3 +153,26 @@ def thermodataset(balanced=False):
                     Y.append(0)
     cl, clids = label2class(Y)
     return seqs, seqids, cl, Y
+
+def thermodataset2():
+    folder = '/mnt/SBC1/data/thermostability/lin10'
+    """ doi:  10.1016/j.mimet.2010.10.0131 """
+    """ h.txt: thermophilic, l.txt: mesophilic. """
+    seqs = []
+    seqids = []
+    Y = []
+    f1 = os.path.join(folder, 'l.txt')
+    rd1 = SeqIO.to_dict(SeqIO.parse(f1, "fasta"))
+    for s in sorted(rd1):
+        seqs.append( str(rd1[s]) )
+        seqids.append( s )
+        Y.append( 0 )
+    f1 = os.path.join(folder, 'h.txt')
+    rd1 = SeqIO.to_dict(SeqIO.parse(f1, "fasta"))
+    for s in sorted(rd1):
+        seqs.append( str(rd1[s]) )
+        seqids.append( s )
+        Y.append( 1 )
+
+    cl, clids = label2class(Y)
+    return seqs, seqids, cl, Y
