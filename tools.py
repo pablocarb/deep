@@ -31,7 +31,7 @@ def train_test_split(n, r=0.10, random=True):
     test = ix[split:n]
     return train, test
 
-def dbfasta(fasfile):
+def _dbfasta(fasfile):
     seqdict = {}
     for seq in SeqIO.parse(fasfile, "fasta"):
         seqid = seq.id
@@ -41,7 +41,7 @@ def dbfasta(fasfile):
         seqdict[uniprot] = seq
     return seqdict
 
-def seqinfo(infofile):
+def _seqinfo(infofile):
     seqinfo = {}
     ecinfo = {}
     for line in open(infofile):
@@ -63,7 +63,7 @@ def seqinfo(infofile):
                 continue
     return seqinfo, ecinfo
 
-def ecdataset(seqdict, ecinfo):
+def _ecdataset(seqdict, ecinfo):
     data = {}
     for ec in ecinfo:
         if ec not in data:
@@ -103,9 +103,9 @@ def ecdataset(TEST=False):
     fasfile = os.path.join('/mnt/SBC1/data/METANETX2', 'seqs.fasta')
     infofile = os.path.join('/mnt/SBC1/data/METANETX2', 'reac_seqs.tsv')
 
-    seqdict = tools.dbfasta(fasfile)
-    seqinfo, ecinfo = tools.seqinfo(infofile)
-    data = tools.ecdataset(seqdict, ecinfo)
+    seqdict = tools._dbfasta(fasfile)
+    seqinfo, ecinfo = tools._seqinfo(infofile)
+    data = tools._ecdataset(seqdict, ecinfo)
 
     pattern = ''
     eclist = set()
