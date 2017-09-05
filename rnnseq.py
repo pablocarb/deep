@@ -49,7 +49,10 @@ def tensorSeqHashed(seqs, MAX_SEQ_LENGTH, SEQDEPTH, TOKEN_SIZE, HASH_FUNCTION= '
                     Xs[i, l, (k-1)*TOKEN_SIZE + input1[l]-1] = 1
                 except:
                     continue
-    Xsr = np.flip( Xs, 1 )
+    if 'flip' in dir(np): # np >= 1.12
+        Xsr = np.flip( Xs, 1 )
+    else:
+        Xsr = np.fliplr( Xs )
     return Xsr
 
 def tensorReact(reac):
@@ -67,8 +70,9 @@ TOKEN_SIZE = 20
 print("Building training set...")
 
 #DATASET = 'THERMO'
-DATASET = 'THERMO2'
+#DATASET = 'THERMO2'
 #DATASET = 'EC'
+DATASET = 'RFP'
 
 if DATASET == 'EC':
     seqs, seqids, Y, Yids = tools.ecdataset()
@@ -78,6 +82,24 @@ if DATASET == 'EC':
     METRICS = 'categorical_accuracy'
     OUTACTIVATION = 'softmax'
     EPOCHS = 1000
+    LOSS = 'categorical_crossentropy'
+    OPTIMIZER='rmsprop'
+    SUBSAMPLE = None
+    BATCH_SIZE = 100
+elif DATASET == 'RFP':
+    seqs, seqids, Y, Yids = tools.seq2reacdataset(8)
+    # TO DO: keep only non-zer bits
+    SEQDEPTH = 4
+    LSTMDIM = 128
+    HIDDENDIM = 256
+    METRICS = 'categorical_accuracy'
+    OUTACTIVATION = 'sigmoid'
+    EPOCHS = 10
+    LOSS = 'binary_crossentropy'
+    LOSS = 'mse'
+    SUBSAMPLE = 50000
+    OPTIMIZER='adamax'
+    BATCH_SIZE = 5000
 elif DATASET == 'THERMO':
     seqs, seqids, Y, Yids = tools.thermodataset(balanced=True)
     SEQDEPTH = 2
@@ -86,6 +108,10 @@ elif DATASET == 'THERMO':
     METRICS = 'categorical_accuracy'
     OUTACTIVATION = 'sigmoid'
     EPOCHS = 10
+    LOSS = 'categorical_crossentropy'
+    SUBSAMPLE = None
+    OPTIMIZER='rmsprop'
+    BATCH_SIZE = 100
 elif DATASET == 'THERMO2':
     seqs, seqids, Y, Yids = tools.thermodataset2()
     SEQDEPTH = 8
@@ -95,19 +121,29 @@ elif DATASET == 'THERMO2':
     OUTACTIVATION = 'softmax'
     EPOCHS = 10
     TOKEN_SIZE = 40
+    BATCH_SIZE = 100
+    LOSS = 'categorical_crossentropy'
+    OPTIMIZER='rmsprop'
+    SUBSAMPLE = None
     vseqs, vseqids, vY, vYids = tools.thermodataset(balanced=True)
     vY =  np_utils.to_categorical(vY)
     vXsr =  tensorSeqHashed(vseqs, MAX_SEQ_LENGTH, SEQDEPTH, TOKEN_SIZE, HASH_FUNCTION= 'md5')
 
+# Shuffle order to avoid biases
 ix = [i for i in np.arange(0, len(seqs))]
 np.random.shuffle( ix )
+if SUBSAMPLE is not None:
+    ix = ix[0:SUBSAMPLE]
 seqs = [seqs[i] for i in ix]
 seqids = [seqids[i] for i in ix]
 Y = [Y[i] for i in ix]
 Yids = [Yids[i] for i in ix]
 
 TRAIN_BATCH_SIZE = len(seqs)
-Y =  np_utils.to_categorical(Y)
+if DATASET != 'RFP':
+    Y =  np_utils.to_categorical(Y)
+else:
+    Y = np.array( Y )
 
 print("Training set [%s]: %d; Classes: %d" % (DATASET, len(seqs), len(set(Yids))))
 
@@ -159,8 +195,10 @@ if IMERGE:
 # Typically for LSTM, we use RMSprop(lr=0.01) optimizer
 
 #model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
-model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['categorical_accuracy'])
+model.compile(loss=LOSS, optimizer=OPTIMIZER, metrics=[METRICS])
 
-#model.optimizer.lr = 0.001
+#model.optimizer.lr = 0.1
 
-model.fit(Xsr, Y, epochs=EPOCHS, batch_size=100, validation_data=(vXsr, vY)) #validation_split=0.1)
+model.fit(Xsr, Y, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_split=0.1)
+# This was a test for THERMO2 set
+#model.fit(Xsr, Y, epochs=EPOCHS, batch_size=100, validation_data=(vXsr, vY)) #validation_split=0.1)

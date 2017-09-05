@@ -69,6 +69,13 @@ def _seqinfo(infofile):
                 continue
     return seqinfo, ecinfo
 
+def _reacinfo(seqinfo):
+    srpair = []
+    for s in sorted(seqinfo):
+        for r in sorted(seqinfo[s]):
+            srpair.append( (s, r) )
+    return srpair
+
 def _ecdataset(seqdict, ecinfo):
     data = {}
     for ec in ecinfo:
@@ -109,9 +116,9 @@ def ecdataset(TEST=False):
     fasfile = os.path.join('/mnt/SBC1/data/METANETX2', 'seqs.fasta')
     infofile = os.path.join('/mnt/SBC1/data/METANETX2', 'reac_seqs.tsv')
 
-    seqdict = tools._dbfasta(fasfile)
-    seqinfo, ecinfo = tools._seqinfo(infofile)
-    data = tools._ecdataset(seqdict, ecinfo)
+    seqdict = _dbfasta(fasfile)
+    seqinfo, ecinfo = _seqinfo(infofile)
+    data = _ecdataset(seqdict, ecinfo)
 
     pattern = ''
     eclist = set()
@@ -122,8 +129,35 @@ def ecdataset(TEST=False):
         ectest = set(['1.4.1.13','2.2.1.2','3.1.1.3','4.1.1.11','5.1.1.1','6.1.1.18'])
         eclist = ectest
 
-    seqs, seqids, Y, Yids = tools.dataset(data, eclist)
+    seqs, seqids, Y, Yids = dataset(data, eclist)
     return seqs, seqids, Y, Yids
+
+def seq2reacdataset(radius=5):
+    """ Training set about predicting reaction fingerprints """
+    fasfile = os.path.join('/mnt/SBC1/data/METANETX2', 'seqs.fasta')
+    infofile = os.path.join('/mnt/SBC1/data/METANETX2', 'reac_seqs.tsv')
+    
+    seqdict = _dbfasta(fasfile)
+    seqinfo, ecinfo = _seqinfo(infofile)
+    rinfo = reactionFingerprint(radius)
+    rvector = reactionVector(rinfo)
+    data = _reacinfo(seqinfo)
+    seqs = []
+    seqid = []
+    Y = []
+    Yids = []
+    for x in data:
+        s = x[0]
+        r = x[1][0]
+        if r in rvector and s in seqdict:
+            seqs.append( str(seqdict[s].seq) )
+            seqid.append( s )
+            Y.append( rvector[r] )
+            Yids.append( r )
+    Y = np.array( Y )
+    return seqs, seqid, Y, Yids
+
+
 
 def thermodataset(balanced=False):
     folder = '/mnt/SBC1/data/thermostability/montanucci08'
@@ -190,7 +224,6 @@ def reacDataset():
     with open(rsmiFile) as f:
         for row in csv.DictReader(f):
             rid = row['RID']
-            if rlist is not None
             smi = row['SMILES']
             left, right = smi.split('>>')
             rleft = left.split('.')
@@ -221,6 +254,15 @@ def reacDataset():
             rset.append( (rid, mleft, mright, rleft, rright) )
     return rset
 
+def reactionVector(fp):
+    """ Convert fingerprint to vector and return if not empty """
+    rv = {}
+    for r in fp:
+        v = np.array( [int(x) for x in fp[r].ToBitString()] )
+        if np.sum(v) != 0:
+            rv[r] = v
+    return rv
+
 def reactionFingerprint(radius=5, rlist=None):
     """ Reaction binary fingerprint based on prod-subs fingerprint logic difference """
     """ Suitable for training sets or output sets """
@@ -234,7 +276,6 @@ def reactionFingerprint(radius=5, rlist=None):
     with open(rsmiFile) as f:
         for row in csv.DictReader(f):
             rid = row['RID']
-            if rlist is not None
             smi = row['SMILES']
             left, right = smi.split('>>')
             rleft = left.split('.')
