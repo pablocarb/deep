@@ -1,7 +1,13 @@
+""" Tools for deep learning encoding """
 from Bio import SeqIO
 from Bio.PDB.Polypeptide import d1_to_index
 import numpy as np
 import os,glob
+from rdkit.Chem.rdmolfiles import MolFromSmiles
+from rdkit.Chem.rdmolops import RDKFingerprint
+import csv
+import sys
+
 
 def kmers(seq, n):
     kpos = []
@@ -176,3 +182,111 @@ def thermodataset2():
 
     cl, clids = label2class(Y)
     return seqs, seqids, cl, Y
+
+def reacDataset():
+    rset = []
+    csv.field_size_limit(sys.maxsize) # To avoid error with long csv fields
+    rsmiFile = os.path.join('/mnt/SBC1/data/METANETX2', 'reac_smi.csv')
+    with open(rsmiFile) as f:
+        for row in csv.DictReader(f):
+            rid = row['RID']
+            if rlist is not None
+            smi = row['SMILES']
+            left, right = smi.split('>>')
+            rleft = left.split('.')
+            rright = right.split('.')
+            ok = True
+            mleft = []
+            mright = []
+            for c in rleft:
+                if c not in smiles:
+                    try:
+                        smiles[c] = MolFromSmiles(c)
+                    except:
+                        ok = False
+                        break
+                mleft.append((c, smiles[c]))
+            if not ok:
+                continue
+            for c in rright:
+                if c not in smiles:
+                    try:
+                        smiles[c] = MolFromSmiles(c)
+                    except:
+                        ok = False
+                        break
+                mright.append((c, smiles[c]))
+            if not ok:
+                continue
+            rset.append( (rid, mleft, mright, rleft, rright) )
+    return rset
+
+def reactionFingerprint(radius=5, rlist=None):
+    """ Reaction binary fingerprint based on prod-subs fingerprint logic difference """
+    """ Suitable for training sets or output sets """
+    """ We use RDKit fingerprints with selected radius """
+    """ rsmifile: precomputed reaction SMILES from METANETX2 """
+    csv.field_size_limit(sys.maxsize) # To avoid error with long csv fields
+    rsmiFile = os.path.join('/mnt/SBC1/data/METANETX2', 'reac_smi.csv')
+    smiles = {}
+    fps = {}
+    rfp = {}
+    with open(rsmiFile) as f:
+        for row in csv.DictReader(f):
+            rid = row['RID']
+            if rlist is not None
+            smi = row['SMILES']
+            left, right = smi.split('>>')
+            rleft = left.split('.')
+            rright = right.split('.')
+            ok = True
+            mleft = []
+            mright = []
+            for c in rleft:
+                if c not in smiles:
+                    try:
+                        smiles[c] = MolFromSmiles(c)
+                    except:
+                        ok = False
+                        break
+                mleft.append((c, smiles[c]))
+            if not ok:
+                continue
+            for c in rright:
+                if c not in smiles:
+                    try:
+                        smiles[c] = MolFromSmiles(c)
+                    except:
+                        ok = False
+                        break
+                mright.append((c, smiles[c]))
+            if not ok:
+                continue
+            for c in mright:
+                if c[0] not in fps:
+                    try:
+                        fps[c[0]] = RDKFingerprint(c[1], minPath=1, maxPath=radius)
+                    except:
+                        ok = False
+                        break
+                if rid not in rfp:
+                    rfp[rid] = fps[c[0]]
+                else:
+                    rfp[rid] = rfp[rid] | fps[c[0]]
+            if not ok:
+                del rfp[rid]
+            for c in mleft:
+                if c[0] not in fps:
+                    try:
+                        fps[c[0]] = RDKFingerprint(c[1], minPath=1, maxPath=radius)
+                    except:
+                        ok = False
+                        break
+                if rid not in rfp:
+                    rfp[rid] = fps[c[0]]
+                else:
+                    rfp[rid] = rfp[rid] ^ fps[c[0]]
+            if not ok:
+                del rfp[rid]
+                continue
+    return rfp

@@ -52,6 +52,10 @@ def tensorSeqHashed(seqs, MAX_SEQ_LENGTH, SEQDEPTH, TOKEN_SIZE, HASH_FUNCTION= '
     Xsr = np.flip( Xs, 1 )
     return Xsr
 
+def tensorReact(reac):
+    """ To do: provide a list of reaction SMILES, return a tensor """
+    pass
+
 """ Maximum sequence length (padded with zeros) """
 MAX_SEQ_LENGTH = 1000
 """ K-mer depth """
