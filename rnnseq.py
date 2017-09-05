@@ -100,6 +100,7 @@ np.random.shuffle( ix )
 seqs = [seqs[i] for i in ix]
 seqids = [seqids[i] for i in ix]
 Y = [Y[i] for i in ix]
+Yids = [Yids[i] for i in ix]
 
 TRAIN_BATCH_SIZE = len(seqs)
 Y =  np_utils.to_categorical(Y)
