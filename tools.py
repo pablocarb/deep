@@ -113,6 +113,7 @@ def dataset(data, eclist, minsize=100, shuffle=True):
     return seqs, seqids, cl, ectrain
 
 def ecdataset(TEST=False):
+    """ Currently each row in the training set if one EC, perhaps change to multi-class? """
     fasfile = os.path.join('/mnt/SBC1/data/METANETX2', 'seqs.fasta')
     infofile = os.path.join('/mnt/SBC1/data/METANETX2', 'reac_seqs.tsv')
 
@@ -156,6 +157,46 @@ def seq2reacdataset(radius=5):
             Yids.append( r )
     Y = np.array( Y )
     return seqs, seqid, Y, Yids
+
+def seq2reacdataset2():
+    """ Training set about predicting reaction as a non-exclussive classifier """
+    fasfile = os.path.join('/mnt/SBC1/data/METANETX2', 'seqs.fasta')
+    infofile = os.path.join('/mnt/SBC1/data/METANETX2', 'reac_seqs.tsv')
+    
+    seqdict = _dbfasta(fasfile)
+    seqinfo, ecinfo = _seqinfo(infofile)
+    data = _reacinfo(seqinfo)
+    seqs = []
+    seqid = []
+    Y = []
+    Yids = []
+    seqrdict = {}
+    rlist = set()
+    for x in data:
+        s = x[0]
+        r = x[1][0]
+        if s not in seqdict:
+            continue
+        if s not in seqrdict:
+            seqrdict[s] = set()
+        seqrdict[s].add(r)
+        rlist.add(r)
+    # We define multiclass output vector
+    Yids = sorted(rlist)
+    Ylabels = []
+    for s in sorted(seqrdict):
+        seqs.append( str(seqdict[s].seq) )
+        seqid.append( s )
+        v = np.zeros( len(Yids) )
+        vlabels = []
+        for r in seqrdict[s]:
+            ix = Yids.index(r)
+            v[ ix ] = 1
+            vlabels.append( (ix,r) )
+        Y.append( v )
+        Ylabels.append( vlabels )
+    Y = np.array( Y )
+    return seqs, seqid, Y, Ylabels
 
 
 
@@ -254,16 +295,27 @@ def reacDataset():
             rset.append( (rid, mleft, mright, rleft, rright) )
     return rset
 
-def reactionVector(fp):
+def reactionVector(fp, signed=False):
     """ Convert fingerprint to vector and return if not empty """
+    """ Return center as a mask or signed """
     rv = {}
     for r in fp:
-        v = np.array( [int(x) for x in fp[r].ToBitString()] )
-        if np.sum(v) != 0:
+        left, right = fp[r]
+        # Reaction center
+        center = right ^ left
+        # Left center
+        rcenter = center & right
+        # Right center
+        lcenter = center & left
+        if not signed:
+            v = np.array( [int(x) for x in center.ToBitString()] )
+        else:
+            v = np.array( [int(x) for x in rcenter.ToBitString()] ) - np.array( [int(x) for x in lcenter.ToBitString()] )
+        if np.sum(np.abs(v)) != 0:
             rv[r] = v
     return rv
 
-def reactionFingerprint(radius=5, rlist=None):
+def reactionFingerprint(radius=5, fpSize=2048, rlist=None):
     """ Reaction binary fingerprint based on prod-subs fingerprint logic difference """
     """ Suitable for training sets or output sets """
     """ We use RDKit fingerprints with selected radius """
@@ -303,31 +355,33 @@ def reactionFingerprint(radius=5, rlist=None):
                 mright.append((c, smiles[c]))
             if not ok:
                 continue
+            rfp[rid] = [None, None]
             for c in mright:
                 if c[0] not in fps:
                     try:
-                        fps[c[0]] = RDKFingerprint(c[1], minPath=1, maxPath=radius)
+                        fps[c[0]] = RDKFingerprint(c[1], minPath=1, maxPath=radius, fpSize=fpSize)
                     except:
                         ok = False
                         break
-                if rid not in rfp:
-                    rfp[rid] = fps[c[0]]
+                if rfp[rid][1] is None:
+                    rfp[rid][1] = fps[c[0]]
                 else:
-                    rfp[rid] = rfp[rid] | fps[c[0]]
-            if not ok:
+                    rfp[rid][1] = rfp[rid][1] | fps[c[0]]
+            if not ok or rfp[rid][1] is None:
                 del rfp[rid]
+                continue
             for c in mleft:
                 if c[0] not in fps:
                     try:
-                        fps[c[0]] = RDKFingerprint(c[1], minPath=1, maxPath=radius)
+                        fps[c[0]] = RDKFingerprint(c[1], minPath=1, maxPath=radius, fpSize=fpSize)
                     except:
                         ok = False
                         break
-                if rid not in rfp:
-                    rfp[rid] = fps[c[0]]
+                if rfp[rid][0] is None:
+                    rfp[rid][0] = fps[c[0]]
                 else:
-                    rfp[rid] = rfp[rid] ^ fps[c[0]]
-            if not ok:
+                    rfp[rid][0] = rfp[rid][0] | fps[c[0]]
+            if not ok or rfp[rid][0] is None:
                 del rfp[rid]
                 continue
     return rfp

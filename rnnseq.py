@@ -73,6 +73,7 @@ print("Building training set...")
 #DATASET = 'THERMO2'
 #DATASET = 'EC'
 DATASET = 'RFP'
+#DATASET = 'REAC'
 
 if DATASET == 'EC':
     seqs, seqids, Y, Yids = tools.ecdataset()
@@ -86,6 +87,19 @@ if DATASET == 'EC':
     OPTIMIZER='rmsprop'
     SUBSAMPLE = None
     BATCH_SIZE = 100
+elif DATASET == 'REAC':
+    seqs, seqids, Y, Yids = tools.seq2reacdataset2()
+    SEQDEPTH = 4
+    LSTMDIM = 128
+    HIDDENDIM = 256
+    METRICS = 'categorical_accuracy'
+    OUTACTIVATION = 'sigmoid'
+    EPOCHS = 10
+    LOSS = 'binary_crossentropy'
+    LOSS = 'mse'
+    SUBSAMPLE = 5000
+    OPTIMIZER='adamax'
+    BATCH_SIZE = 500
 elif DATASET == 'RFP':
     seqs, seqids, Y, Yids = tools.seq2reacdataset(8)
     # TO DO: keep only non-zer bits
@@ -97,7 +111,7 @@ elif DATASET == 'RFP':
     EPOCHS = 10
     LOSS = 'binary_crossentropy'
     LOSS = 'mse'
-    SUBSAMPLE = 50000
+    SUBSAMPLE = None
     OPTIMIZER='adamax'
     BATCH_SIZE = 5000
 elif DATASET == 'THERMO':
@@ -140,12 +154,13 @@ Y = [Y[i] for i in ix]
 Yids = [Yids[i] for i in ix]
 
 TRAIN_BATCH_SIZE = len(seqs)
-if DATASET != 'RFP':
+if DATASET != 'RFP' and DATASET != 'REAC':
+    # Convert to categorical output (one-hot)
     Y =  np_utils.to_categorical(Y)
 else:
     Y = np.array( Y )
 
-print("Training set [%s]: %d; Classes: %d" % (DATASET, len(seqs), len(set(Yids))))
+print("Training set [%s]: %d; Classes: %d" % (DATASET, len(seqs), Y.shape[1]))
 
 print("Allocating tensors...")
 
