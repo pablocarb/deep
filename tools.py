@@ -69,6 +69,20 @@ def _seqinfo(infofile):
                 continue
     return seqinfo, ecinfo
 
+def _mnxsmi():
+    smi = {}
+    infofile = os.path.join('/mnt/SBC1/data/METANETX2', 'chem_prop.tsv')
+    with open(infofile) as h:
+        for row in h:
+            if row.startswith('#'):
+                continue
+            info = row.rstrip().split('\t')
+            met = info[0]
+            smiles = info[6]
+            if len(info[6]) > 0:
+                smi[met] = smiles
+    return smi
+
 def _reacinfo(seqinfo):
     srpair = []
     for s in sorted(seqinfo):
@@ -133,6 +147,57 @@ def ecdataset(TEST=False):
     seqs, seqids, Y, Yids = dataset(data, eclist)
     return seqs, seqids, Y, Yids
 
+def _kcat(kcatfile):
+    met = set()
+    data = []
+    with open(kcatfile) as handler:
+        for row in handler:
+            ec, seq, comp, reac, kc, kcsd = row.rstrip().split('\t')
+            kc = float(kc)
+            kcsd = float(kc)
+            data.append( {'ec': ec, 'seq': seq, 'comp': comp, 'reac': reac, 'kcat': kc, 'kcatsd': kcsd} )
+            met.add( comp )
+    return data, met
+      
+
+def seq2kcat(radius=5, fpSize=32):
+    """ Training set for predicting kcat """
+    fasfile = os.path.join('/mnt/SBC1/data/METANETX2', 'seqs.fasta')
+    infofile = os.path.join('/mnt/SBC1/data/METANETX2', 'reac_seqs.tsv')
+    kcatfile = os.path.join('/mnt/SBC1/data/kinetics', 'tn_clean_2.txt')
+    
+    seqdict = _dbfasta(fasfile)
+    seqinfo, ecinfo = _seqinfo(infofile)
+    rinfo, cinfo = reactionFingerprint(radius)
+    rvector = reactionVector(rinfo)
+    data = _reacinfo(seqinfo)
+    kdata, met = _kcat(kcatfile)
+    smi = _mnxsmi()
+    cfp = compoundFingerprint(met, smi, radius, fpSize=fpSize)
+    cvector = compoundVector(cfp)
+    seqs = []
+    seqid = []
+    comps = []
+    compsid = []
+    Y = []
+    Yids = []
+    for x in kdata:
+        seq = x['seq']
+        comp = x['comp']
+        kc = x['kcat']
+        reac = x['reac']
+        if comp in cvector and seq in seqdict:
+            seqs.append( str(seqdict[seq].seq) )
+            seqid.append( seq )
+            comps.append( cvector[comp] )
+            compsid.append( comp )
+            Y.append( kc )
+            Yids.append( reac )
+    Y = np.array( Y )
+    return seqs, seqid, comps, compsid, Y, Yids
+
+
+
 def seq2reacdataset(radius=5):
     """ Training set about predicting reaction fingerprints """
     fasfile = os.path.join('/mnt/SBC1/data/METANETX2', 'seqs.fasta')
@@ -140,7 +205,7 @@ def seq2reacdataset(radius=5):
     
     seqdict = _dbfasta(fasfile)
     seqinfo, ecinfo = _seqinfo(infofile)
-    rinfo = reactionFingerprint(radius)
+    rinfo, cinfo = reactionFingerprint(radius)
     rvector = reactionVector(rinfo)
     data = _reacinfo(seqinfo)
     seqs = []
@@ -295,6 +360,18 @@ def reacDataset():
             rset.append( (rid, mleft, mright, rleft, rright) )
     return rset
 
+def compoundVector(fp):
+    """ Convert fingerprint to vector and return if not empty """
+    """ Return center as a mask or signed """
+    cv = {}
+    for c in fp:
+        f = fp[c]
+        v = np.array( [int(x) for x in f.ToBitString()] )
+        if np.sum(np.abs(v)) != 0:
+            cv[c] = v
+    return cv
+
+
 def reactionVector(fp, signed=False):
     """ Convert fingerprint to vector and return if not empty """
     """ Return center as a mask or signed """
@@ -315,11 +392,27 @@ def reactionVector(fp, signed=False):
             rv[r] = v
     return rv
 
+def compoundFingerprint(clist, smi, radius=5, fpSize=2048):
+    cfp = {}
+    for c in clist:
+        if c in smi:
+            try:
+                k = MolFromSmiles(smi[c])
+            except:
+                continue
+            try:
+                f = RDKFingerprint(k, minPath=1, maxPath=radius, fpSize=fpSize)
+            except:
+                continue
+            cfp[c] = f
+    return cfp
+
 def reactionFingerprint(radius=5, fpSize=2048, rlist=None):
     """ Reaction binary fingerprint based on prod-subs fingerprint logic difference """
     """ Suitable for training sets or output sets """
     """ We use RDKit fingerprints with selected radius """
     """ rsmifile: precomputed reaction SMILES from METANETX2 """
+    """ Returns: reaction_fingerprint, metabolite_fingerprint """
     csv.field_size_limit(sys.maxsize) # To avoid error with long csv fields
     rsmiFile = os.path.join('/mnt/SBC1/data/METANETX2', 'reac_smi.csv')
     smiles = {}
@@ -384,4 +477,4 @@ def reactionFingerprint(radius=5, fpSize=2048, rlist=None):
             if not ok or rfp[rid][0] is None:
                 del rfp[rid]
                 continue
-    return rfp
+    return rfp, fps

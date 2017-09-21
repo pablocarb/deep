@@ -72,8 +72,9 @@ print("Building training set...")
 #DATASET = 'THERMO'
 #DATASET = 'THERMO2'
 #DATASET = 'EC'
-DATASET = 'RFP'
+#DATASET = 'RFP'
 #DATASET = 'REAC'
+DATASET = 'KCAT'
 
 if DATASET == 'EC':
     seqs, seqids, Y, Yids = tools.ecdataset()
@@ -100,6 +101,7 @@ elif DATASET == 'REAC':
     SUBSAMPLE = 5000
     OPTIMIZER='adamax'
     BATCH_SIZE = 500
+    IMERGE = False
 elif DATASET == 'RFP':
     seqs, seqids, Y, Yids = tools.seq2reacdataset(8)
     # TO DO: keep only non-zer bits
@@ -111,9 +113,10 @@ elif DATASET == 'RFP':
     EPOCHS = 10
     LOSS = 'binary_crossentropy'
     LOSS = 'mse'
-    SUBSAMPLE = None
+    SUBSAMPLE = 5000
     OPTIMIZER='adamax'
-    BATCH_SIZE = 5000
+    BATCH_SIZE = 500
+    IMERGE = False
 elif DATASET == 'THERMO':
     seqs, seqids, Y, Yids = tools.thermodataset(balanced=True)
     SEQDEPTH = 2
@@ -126,6 +129,7 @@ elif DATASET == 'THERMO':
     SUBSAMPLE = None
     OPTIMIZER='rmsprop'
     BATCH_SIZE = 100
+    IMERGE = False
 elif DATASET == 'THERMO2':
     seqs, seqids, Y, Yids = tools.thermodataset2()
     SEQDEPTH = 8
@@ -142,6 +146,26 @@ elif DATASET == 'THERMO2':
     vseqs, vseqids, vY, vYids = tools.thermodataset(balanced=True)
     vY =  np_utils.to_categorical(vY)
     vXsr =  tensorSeqHashed(vseqs, MAX_SEQ_LENGTH, SEQDEPTH, TOKEN_SIZE, HASH_FUNCTION= 'md5')
+    IMERGE = False
+elif DATASET == 'KCAT':
+    """ Kcat as an example of merging layers """
+    seqs, seqids, comps, compsid, Y, Yids = tools.seq2kcat(8, 64)
+    Yl = np.log(Y)
+    Yn = (np.max(Yl) -Yl)/(np.max(Yl)-np.min(Yl))
+    Y = Yn
+    X2 = np.array ( comps )
+    SEQDEPTH = 2
+    LSTMDIM = 32
+    HIDDENDIM = 256
+    METRICS = 'accuracy'
+    OUTACTIVATION = 'sigmoid'
+    EPOCHS = 100
+    LOSS = 'mse'
+    SUBSAMPLE = None
+    OPTIMIZER= 'rmsprop'
+    BATCH_SIZE = 100
+    IMERGE = True
+
 
 # Shuffle order to avoid biases
 ix = [i for i in np.arange(0, len(seqs))]
@@ -154,13 +178,19 @@ Y = [Y[i] for i in ix]
 Yids = [Yids[i] for i in ix]
 
 TRAIN_BATCH_SIZE = len(seqs)
-if DATASET != 'RFP' and DATASET != 'REAC':
+if DATASET != 'RFP' and DATASET != 'REAC' and DATASET != 'KCAT':
     # Convert to categorical output (one-hot)
     Y =  np_utils.to_categorical(Y)
 else:
     Y = np.array( Y )
 
-print("Training set [%s]: %d; Classes: %d" % (DATASET, len(seqs), Y.shape[1]))
+if len(Y.shape) > 1:
+    odim = Y.shape[1]
+else:
+    odim = 1
+
+
+print("Training set [%s]: %d; Classes: %d" % (DATASET, len(seqs), odim))
 
 print("Allocating tensors...")
 
@@ -171,8 +201,10 @@ else:
     Xsr = tensorSeq(seqs, MAX_SEQ_LENGTH, SEQDEPTH, TOKEN_SIZE)
 
 
+#np.savez_compressed('/mnt/SBC1/data/deep-data/train.npz', x=Xsr, y=Y)
 
 print("Model definition...")
+
 
 model = Sequential()
 model.add( LSTM(LSTMDIM, input_shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE),
@@ -181,39 +213,38 @@ model.add( LSTM(LSTMDIM, input_shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE),
 #model.add( LSTM(32, dropout=0.1, recurrent_dropout=0.1) )
 # model.add( Dense(100, activation='tanh') )
 model.add( Dense(HIDDENDIM, activation='relu') )
-model.add( Dense(Y.shape[1], activation=OUTACTIVATION) )
+model.add( Dense(odim, activation=OUTACTIVATION) )
 
 # A test example about merging layers: merge the output of the RNN with some other external input tensor
-IMERGE = False
 if IMERGE:
     # This is my sequence tensor
     input1 = Input(shape=(MAX_SEQ_LENGTH, SEQDEPTH*TOKEN_SIZE))
     x10 = LSTM(LSTMDIM, activation='tanh', recurrent_activation='sigmoid',
          dropout=0.2, recurrent_dropout=0.01)(input1)
-    x1 = Dense(16)(x10)
+    x1 = Dense(32, activation='relu')(x10)
 
     # A random input tensor just for testing purposes
-    noise = np.random.normal( size=(len(seqs), 32) )
-    input2 = Input(shape=(noise.shape,))
-    x2 = Dense(8, activation='relu')(input2)
+    #    noise = np.random.normal( size=(len(seqs), 32) )
+    input2 = Input(shape=(X2.shape[1],))
+    x2 = Dense(32, activation='tanh')(input2)
 
     # Concatenate
-    concat = Concatenate()([x1, x2])
-    out1 = Dense(18)(concat)
-    out = Dense(Y.shape[1])(out1)
+    concat = Concatenate()([x10, x2])
+    out1 = Dense(18, activation='sigmoid')(concat)
+    out = Dense(odim, activation='sigmoid')(out1)
 
     # Define model from tensor graph
     bigmodel = Model(inputs=[input1, input2], outputs=out)
-    bigmodel.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['categorical_accuracy'])
-    bigmodel.fit([Xsr,noise], Y, epochs=1000, batch_size=100, validation_split=0.1)
+    bigmodel.compile(loss=LOSS, optimizer=OPTIMIZER, metrics=[METRICS])
+    bigmodel.fit([Xsr,X2], Y, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_split=0.1)
 
 # Typically for LSTM, we use RMSprop(lr=0.01) optimizer
-
+else:
 #model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
-model.compile(loss=LOSS, optimizer=OPTIMIZER, metrics=[METRICS])
-
+    model.compile(loss=LOSS, optimizer=OPTIMIZER, metrics=[METRICS])
+    model.fit(Xsr, Y, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_split=0.1)
 #model.optimizer.lr = 0.1
 
-model.fit(Xsr, Y, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_split=0.1)
+
 # This was a test for THERMO2 set
 #model.fit(Xsr, Y, epochs=EPOCHS, batch_size=100, validation_data=(vXsr, vY)) #validation_split=0.1)
